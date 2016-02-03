@@ -1,0 +1,117 @@
+  #region 图片上传
+        [HttpPost]
+        public JsonResult UpLoadPhoto(HttpPostedFileBase file)
+        {
+            var res = CheckImg(file);
+            string imgurl = "";
+            string strerror = "";
+            string imgname = "";
+            if (res == "ok")
+            {
+                var fileName = file.FileName;//Path.GetExtension() 也许可以解决这个问题，先不管了。
+                int i = fileName.LastIndexOf('.');//取得文件名中最后一个"."的索引    
+                string fileextenName = fileName.Substring(i).ToLower();
+                string newFileName = Guid.NewGuid().ToString() + fileextenName;
+                var pathtemp = Path.Combine(Server.MapPath("~/Uploads/"), newFileName);//先存入临时文件夹
+                var scrtemp = Path.Combine("~/Uploads/", newFileName);//图片展示的地址
+                imgname = fileName.Replace(fileextenName, "");//图片名称
+
+                var list = Session["Imgscr"] as List<string>;
+                var slist = Session["ImgServerscr"] as List<string>;
+                if (list != null)
+                {
+                    list.Add(scrtemp);
+                }
+                else
+                {
+                    list = new List<string> { scrtemp };
+                    Session["Imgscr"] = list;
+                }
+                if (slist != null)
+                {
+                    slist.Add(pathtemp);
+                }
+                else
+                {
+                    slist = new List<string> { pathtemp };
+                    Session["ImgServerscr"] = slist;
+                }
+
+                file.SaveAs(pathtemp);
+                //Response.Write("");
+                imgurl = "/Uploads/" + newFileName + "";
+            }
+            else
+            {
+                strerror = res;
+            }
+            var Result = new { ErrorInfo = strerror, imgUrl = imgurl, imgId = InsertFiles(imgurl, imgname).ToString() };
+
+
+            return Json(Result, JsonRequestBehavior.AllowGet);
+
+        }
+        private string CheckImg(HttpPostedFileBase file)
+        {
+            if (file == null) return "图片不能空！";
+            if (file.ContentLength / 1024 > 8000)
+            {
+                return "图片太大";
+            }
+            if (file.ContentLength / 1024 < 10)
+            {
+                return "图片太小！";
+            }
+            var image = GetExtensionName(file.FileName).ToLower();
+            if (image != ".bmp" && image != ".png" && image != ".gif" && image != ".jpg" && image != ".jpeg")// 这里你自己加入其他图片格式，最好全部转化为大写再判断，我就偷懒了
+            {
+                return "格式不对";
+            }
+
+            var scrtemp = Path.Combine("/Uploads/", file.FileName);//图片展示的地址
+            var list = Session["Imgscr"] as List<string>;
+            if (list != null && list.Find(n => n == scrtemp) != null)
+            {
+                return "同样的照片已经存在！";
+            }
+
+            return "ok";
+        }
+        public string GetExtensionName(string fileName)
+        {
+            if (fileName.LastIndexOf("\\", StringComparison.Ordinal) > -1)//在不同浏览器下，filename有时候指的是文件名，有时候指的是全路径，所有这里要要统一。
+            {
+                fileName = fileName.Substring(fileName.LastIndexOf("\\", StringComparison.Ordinal) + 1);//IndexOf 有时候会受到特殊字符的影响而判断错误。加上这个就纠正了。
+            }
+            return Path.GetExtension(fileName.ToLower());
+        }
+
+        #endregion
+
+
+        #region 功能
+
+        /// <summary>
+        /// 插入files表
+        /// </summary>
+        /// <param name="url"></param>
+        public int InsertFiles(string url, string name)
+        {
+            try
+            {
+                Models.tbFiles file = new Models.tbFiles
+                {
+                    FileType = "img",
+                    FilePath = url,
+                    FileName = name
+                };
+                dal.tbFiles.Add(file);
+                dal.SaveChanges();
+                return file.FileID;
+            }
+            catch (Exception e)
+            {
+                throw;
+            }
+
+        }
